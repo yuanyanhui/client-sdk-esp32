@@ -1,10 +1,7 @@
 #include "esp_log.h"
-#include "cJSON.h"
-#include "bsp/esp-bsp.h"
 #include "livekit.h"
 #include "livekit_sandbox.h"
 #include "media.h"
-#include "board.h"
 #include "example.h"
 
 static const char *TAG = "livekit_example";
@@ -42,67 +39,6 @@ static void on_participant_info(const livekit_participant_info_t* info, void* ct
     }
 }
 
-/// Invoked by a remote participant to set the state of an on-board LED.
-static void set_led_state(const livekit_rpc_invocation_t* invocation, void* ctx)
-{
-    if (invocation->payload == NULL) {
-        livekit_rpc_return_error("Missing payload");
-        return;
-    }
-    cJSON *root = cJSON_Parse(invocation->payload);
-    if (!root) {
-        livekit_rpc_return_error("Invalid JSON");
-        return;
-    }
-
-    char* error = NULL;
-    do {
-        const cJSON *color_entry = cJSON_GetObjectItemCaseSensitive(root, "color");
-        const cJSON *state_entry = cJSON_GetObjectItemCaseSensitive(root, "state");
-        if (!cJSON_IsString(color_entry) || !cJSON_IsBool(state_entry)) {
-            error = "Unexpected JSON format";
-            break;
-        }
-
-        const char *color = color_entry->valuestring;
-
-        bool state = cJSON_IsTrue(state_entry);
-
-        bsp_led_t led;
-        if (strncmp(color, "red", 3) == 0) {
-            // TODO: there is a bug in the Korvo2 BSP which causes the LED pins to be swapped
-            // (i.e., blue is mapped to red and red is mapped to blue): https://github.com/espressif/esp-bsp/pull/632
-            led = BSP_LED_BLUE;
-        } else if (strncmp(color, "blue", 4) == 0) {
-            led = BSP_LED_RED;
-        } else {
-            error = "Unsupported color";
-            break;
-        }
-        if (bsp_led_set(led, state) != ESP_OK) {
-            error = "Failed to set LED state";
-            break;
-        }
-    } while (0);
-
-    if (!error) {
-        livekit_rpc_return_ok(NULL);
-    } else {
-        livekit_rpc_return_error(error);
-    }
-    // Perform necessary cleanup after returning an RPC result.
-    cJSON_Delete(root);
-}
-
-/// Invoked by a remote participant to get the current CPU temperature.
-static void get_cpu_temp(const livekit_rpc_invocation_t* invocation, void* ctx)
-{
-    float temp = board_get_temp();
-    char temp_string[16];
-    snprintf(temp_string, sizeof(temp_string), "%.2f", temp);
-    livekit_rpc_return_ok(temp_string);
-}
-
 void join_room()
 {
     if (room_handle != NULL) {
@@ -131,10 +67,6 @@ void join_room()
         ESP_LOGE(TAG, "Failed to create room");
         return;
     }
-
-    // Register RPC handlers so they can be invoked by remote participants.
-    livekit_room_rpc_register(room_handle, "set_led_state", set_led_state);
-    livekit_room_rpc_register(room_handle, "get_cpu_temp", get_cpu_temp);
 
     livekit_err_t connect_res;
 #ifdef CONFIG_LK_EXAMPLE_USE_SANDBOX
