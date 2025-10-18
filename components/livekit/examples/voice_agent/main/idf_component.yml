@@ -9,5 +9,4 @@ dependencies:
   livekit/example_utils:
     version: ~0.1.0
     override_path: ../../../../example_utils
-  tempotian/codec_board: ~1.0.0
   espressif/esp-box-3: "^3.0.2"
